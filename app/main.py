@@ -33,7 +33,7 @@ app = FastAPI(
 # CORS Configuration
 origins = [
     "http://localhost:8501",  # For Streamlit development server
-    # Add any other origins here, e.g., "https://your-frontend-domain.com"
+    "https://ladderai.streamlit.app" # streamlit production server
 ]
 
 app.add_middleware(

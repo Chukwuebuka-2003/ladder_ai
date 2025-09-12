@@ -30,13 +30,9 @@ app = FastAPI(
     }
 )
 
-# --- CORS Configuration ---
-# Define the origins that are allowed to make requests to your API
-# In a development environment, you might allow your Streamlit app's URL
-# In production, you would replace this with your actual frontend domain(s)
+# CORS Configuration
 origins = [
     "http://localhost:8501",  # For Streamlit development server
-    "http://localhost:8000",  # If your frontend is also served from localhost:8000
     # Add any other origins here, e.g., "https://your-frontend-domain.com"
 ]
 
@@ -47,7 +43,7 @@ app.add_middleware(
     allow_methods=["*"],           # Allow all methods (GET, POST, PUT, DELETE, etc.)
     allow_headers=["*"],           # Allow all headers
 )
-# --- End CORS Configuration ---
+
 
 # Include routers
 app.include_router(auth.router)

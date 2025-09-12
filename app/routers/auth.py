@@ -1,0 +1,189 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from pydantic import BaseModel, EmailStr
+from datetime import timedelta, datetime
+from database import get_db
+from models import User, EmailOTP
+
+from schemas import (
+    UserCreate,
+    UserVerify,
+    TokenResponse,
+    LoginSchema,
+    SignupRequest,
+    UserProfileResponse,
+    AuthResponse,
+    OTPResponse,
+    OTPRequest,
+    OTPVerify
+)
+
+from utils import generate_otp
+
+# Import necessary functions from auth_service
+from services.auth_service import (
+    get_password_hash,
+    verify_password,
+    create_access_token
+)
+
+from services.deps import get_current_user
+from routers.email import send_otp_email
+
+import logging
+logger = logging.getLogger(__name__)
+
+# ACCESS_TOKEN_EXPIRE_MINUTES is defined in auth_service, but keeping it here
+# for clarity or if it's used elsewhere in this file. If not, it could be removed.
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+OTP_EXPIRY_MINUTES = 10 # Define OTP_EXPIRY_MINUTES before its first use
+
+router = APIRouter()
+
+# User-related routes
+@router.post("/signup", response_model=OTPResponse, status_code=status.HTTP_201_CREATED)
+async def signup(data: SignupRequest, db: Session = Depends(get_db)):
+    logger.info(f"Attempting signup for email: {data.email}, username: {data.username}")
+
+    existing_user = db.query(User).filter(
+        (User.email == data.email) | (User.username == data.username)
+    ).first()
+    if existing_user:
+        logger.warning(f"Signup failed: User already exists with email {data.email} or username {data.username}")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
+
+    user = User(
+        email=data.email,
+        username=data.username,
+        hashed_password=get_password_hash(data.password),
+        is_verified=False
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    # Generate and store OTP
+    code = generate_otp()
+    expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MINUTES)
+    otp = EmailOTP(email=user.email, code=code, expires_at=expires_at)
+    db.add(otp)
+    db.commit()
+    db.refresh(otp)
+
+    # Send OTP via email
+    send_otp_email(user.email, code, OTP_EXPIRY_MINUTES)
+    logger.info(f"OTP email sent to {user.email} after signup. User needs to verify.")
+
+
+    return {"message": "User created. OTP sent."}
+
+@router.post("/login", response_model=TokenResponse)
+async def login(data: LoginSchema, db: Session = Depends(get_db)):
+    logger.info(f"Attempting login for email: {data.email}")
+    # Use User directly
+    user = db.query(User).filter(User.email == data.email).first()
+    # Use imported verify_password
+    if not user or not verify_password(data.password, user.hashed_password):
+        logger.warning(f"Login failed: Invalid credentials for email {data.email}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not user.is_verified: # Crucial: Check if user is verified
+        logger.warning(f"Login failed: Account for email {data.email} is not verified.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account not verified. Please check your email for verification."
+        )
+
+    # Use imported create_access_token
+    access_token = create_access_token({"sub": user.id, "username": user.username})
+    logger.info(f"User {user.username} logged in successfully.")
+    return TokenResponse(access_token=access_token)
+
+
+@router.post("/request-otp", response_model=OTPResponse)
+async def request_otp(payload: OTPRequest, db: Session = Depends(get_db)):
+    logger.info(f"Requesting OTP for email: {payload.email}")
+    # Use User directly
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        logger.warning(f"OTP request failed: User with email {payload.email} not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    # Invalidate any active OTPs for this email first
+    # Use EmailOTP directly
+    db.query(EmailOTP).filter(
+        EmailOTP.email == payload.email,
+        EmailOTP.used == False,
+        EmailOTP.expires_at > datetime.utcnow()
+    ).update({"used": True})
+    db.commit()
+
+    code = generate_otp()
+    expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MINUTES)
+    otp = EmailOTP(email=payload.email, code=code, expires_at=expires_at) # Use EmailOTP directly
+    db.add(otp)
+    db.commit()
+    db.refresh(otp)
+
+    logger.info(f"OTP generated and stored for {payload.email}: {code}. Attempting to send email.")
+    send_otp_email(payload.email, code, OTP_EXPIRY_MINUTES)
+    logger.info(f"OTP email sending procedure initiated for {payload.email}.")
+    return OTPResponse(message="OTP sent to your email")
+
+@router.post("/verify-otp", response_model=OTPResponse)
+async def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
+    logger.info(f"Attempting to verify OTP for email: {payload.email}")
+    # Use EmailOTP directly
+    otp = db.query(EmailOTP).filter(
+        EmailOTP.email == payload.email,
+        EmailOTP.code == payload.code,
+        EmailOTP.used == False,
+        EmailOTP.expires_at > datetime.utcnow()
+    ).first()
+    if not otp:
+        logger.warning(f"OTP verification failed: Invalid or expired OTP for email {payload.email}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP")
+
+    otp.used = True
+
+    # Mark user as verified upon successful OTP verification
+    # Use User directly
+    user = db.query(User).filter(User.email == payload.email).first()
+    if user:
+        user.is_verified = True
+        logger.info(f"User {user.email} has been successfully verified.")
+    else:
+        logger.error(f"Verified OTP for {payload.email} but user not found for verification update.")
+
+    db.commit()
+    logger.info(f"OTP for {payload.email} verified successfully.")
+    return OTPResponse(message="OTP verified successfully. You can now log in.")
+
+@router.post("/refresh-otp", response_model=OTPResponse)
+async def refresh_otp(payload: OTPRequest, db: Session = Depends(get_db)):
+    logger.info(f"Refreshing OTP for email: {payload.email}")
+    # Use User directly
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        logger.warning(f"OTP refresh failed: User with email {payload.email} not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    # Use EmailOTP directly
+    db.query(EmailOTP).filter(
+        EmailOTP.email == payload.email,
+        EmailOTP.used == False,
+        EmailOTP.expires_at > datetime.utcnow()
+    ).update({"used": True})
+    db.commit()
+
+    code = generate_otp()
+    expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MINUTES)
+    otp = EmailOTP(email=payload.email, code=code, expires_at=expires_at) # Use EmailOTP directly
+    db.add(otp)
+    db.commit()
+    db.refresh(otp)
+
+    logger.info(f"New OTP generated and stored for {payload.email}: {code}. Attempting to send email.")
+    send_otp_email(payload.email, code, OTP_EXPIRY_MINUTES)
+    logger.info(f"OTP refresh email sending procedure initiated for {payload.email}.")
+    return OTPResponse(message="New OTP sent to your email")

@@ -1,0 +1,21 @@
+prompts:
+  categorize_expense: 'Given the expense description "{description}" with amount {amount} on {date}, predict the most suitable category. Respond with ONLY the category name. If you are unsure, respond with "Miscellaneous". Possible Categories: Groceries, Dining Out, Transportation, Utilities, Rent/Mortgage, Entertainment, Shopping, Health, Travel, Education, Other.'
+
+  generate_insights: |-
+    Analyze the following expense data for user ID {user_id} between {start_date} and {end_date}.
+    Provide a summary including total spending, top spending categories, and any potential anomalies.
+
+    Expense Data:
+    {expenses_data}
+
+    IMPORTANT INSTRUCTIONS:
+    - Return ONLY a valid JSON object with exactly these keys: "total_spent", "top_categories", "anomalies".
+    - Do NOT include any explanations, markdown, comments, or text before or after the JSON.
+    - Do NOT use backticks (```) or ```json``` wrappers.
+    - total_spent must be a number (float or integer).
+    - top_categories must be a list of objects, each with exactly two keys: "category" (string) and "amount" (number).
+    - anomalies must be a list of objects, each with exactly four keys: "description" (string), "amount" (number), "category" (string), and "reason" (string).
+    - If no anomalies exist, return an empty list: [].
+    - Ensure all values are properly escaped and valid JSON.
+
+    JSON Output:

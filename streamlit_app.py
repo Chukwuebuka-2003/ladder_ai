@@ -4,8 +4,11 @@ import json
 from streamlit_option_menu import option_menu
 from datetime import datetime
 
-FASTAPI_URL = "http://localhost:8000"
+#dev url
+#FASTAPI_URL = "http://localhost:8000"
 
+#prod url
+FASTAPI_URL = "https://ladder-ai.onrender.com"
 
 # Authentication Functions
 def login_user(email, password):

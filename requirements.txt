@@ -18,3 +18,4 @@ httpx
 python-multipart
 psycopg2-binary
 streamlit
+streamlit-option-menu

@@ -26,7 +26,12 @@ if not PUBLIC_KEY:
 
 # Password Hashing Functions
 def get_password_hash(password: str) -> str:
-    """Hashes the given password using bcrypt."""
+    """
+    Hash a plaintext password using bcrypt and return the resulting hash.
+    
+    Returns:
+        A bcrypt-formatted hash string suitable for storing in a user database.
+    """
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -35,6 +40,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create and return a signed JWT access token for the given payload.
+    
+    The function copies `data` to build the token payload, sets the `exp` (expiration) and `iat` (issued-at) claims, and signs the token with the module private key using the ES256 algorithm. If `expires_delta` is provided it controls the token lifetime; otherwise the module default (ACCESS_TOKEN_EXPIRE_MINUTES) is used. If a `sub` claim is present as an int, it will be converted to a string.
+    
+    Parameters:
+        data (dict): Claims to include in the token payload.
+        expires_delta (Optional[timedelta]): Optional time delta to use for the `exp` claim (overrides default).
+    
+    Returns:
+        str: The encoded JWT as a string.
+    """
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire, "iat": datetime.utcnow()})
@@ -47,7 +64,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 def verify_access_token(token: str) -> dict:
-    """Verifies the JWT access token and returns its payload."""
+    """
+    Verify a JWT access token and return its decoded payload.
+    
+    Decodes `token` using the module public key and the ES256 algorithm. On success returns the token payload as a dict; returns None if the token is invalid, expired, or any JWT decoding error occurs.
+    """
     try:
         payload = jwt.decode(token, PUBLIC_KEY, algorithms=[ALGORITHM])
         return payload

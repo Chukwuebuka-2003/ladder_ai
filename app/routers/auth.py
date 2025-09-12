@@ -43,6 +43,22 @@ router = APIRouter()
 # User-related routes
 @router.post("/signup", response_model=OTPResponse, status_code=status.HTTP_201_CREATED)
 async def signup(data: SignupRequest, db: Session = Depends(get_db)):
+    """
+    Create a new unverified user, generate and persist a time-limited email OTP, and send the OTP to the user's email.
+    
+    If a user with the given email or username already exists, raises HTTPException(status_code=409).
+    
+    Parameters:
+        data (SignupRequest): Signup payload containing email, username, and plaintext password.
+    
+    Returns:
+        dict: {"message": "User created. OTP sent."} on success.
+    
+    Side effects:
+        - Inserts a new User with is_verified=False into the database.
+        - Creates an EmailOTP row linked to the user's email with an expiration of OTP_EXPIRY_MINUTES.
+        - Sends the OTP to the user's email address.
+    """
     logger.info(f"Attempting signup for email: {data.email}, username: {data.username}")
 
     existing_user = db.query(User).filter(
@@ -79,6 +95,15 @@ async def signup(data: SignupRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 async def login(data: LoginSchema, db: Session = Depends(get_db)):
+    """
+    Authenticate a user and return a JWT access token.
+    
+    Validates the provided credentials against the stored user record and requires the account to be verified. On success returns a TokenResponse containing a JWT with the user's id and username.
+    
+    Raises:
+        HTTPException: 401 Unauthorized if credentials are invalid.
+        HTTPException: 403 Forbidden if the account exists but is not verified.
+    """
     logger.info(f"Attempting login for email: {data.email}")
     # Use User directly
     user = db.query(User).filter(User.email == data.email).first()
@@ -102,6 +127,20 @@ async def login(data: LoginSchema, db: Session = Depends(get_db)):
 
 @router.post("/request-otp", response_model=OTPResponse)
 async def request_otp(payload: OTPRequest, db: Session = Depends(get_db)):
+    """
+    Request a new one-time password (OTP) for the given email, invalidating any active OTPs and sending a fresh code via email.
+    
+    Looks up the user by payload.email and, if found, marks any currently unused/non-expired EmailOTP records for that email as used, creates and stores a new EmailOTP with a short expiry, and triggers sending the OTP email. Returns an OTPResponse confirming delivery.
+    
+    Parameters:
+        payload (OTPRequest): Request body containing the target email (payload.email).
+    
+    Returns:
+        OTPResponse: Message confirming that the OTP was sent.
+    
+    Raises:
+        HTTPException (404): If no user exists with the provided email.
+    """
     logger.info(f"Requesting OTP for email: {payload.email}")
     # Use User directly
     user = db.query(User).filter(User.email == payload.email).first()
@@ -132,6 +171,21 @@ async def request_otp(payload: OTPRequest, db: Session = Depends(get_db)):
 
 @router.post("/verify-otp", response_model=OTPResponse)
 async def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
+    """
+    Verify a one-time password (OTP) for an email, mark the OTP as used, and set the user as verified.
+    
+    Searches for an unused, unexpired EmailOTP matching payload.email and payload.code. If found, marks that OTP as used, sets the corresponding User.is_verified to True (if the user record exists), commits the change, and returns a success message. If no valid OTP is found, raises HTTP 400.
+    
+    Parameters:
+        payload (OTPVerify): Object containing `email` and `code` to verify.
+        db (Session): Database session (injected dependency).
+    
+    Returns:
+        OTPResponse: Message confirming successful verification.
+    
+    Raises:
+        HTTPException(status_code=400): When the OTP is invalid or expired.
+    """
     logger.info(f"Attempting to verify OTP for email: {payload.email}")
     # Use EmailOTP directly
     otp = db.query(EmailOTP).filter(
@@ -161,6 +215,24 @@ async def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
 
 @router.post("/refresh-otp", response_model=OTPResponse)
 async def refresh_otp(payload: OTPRequest, db: Session = Depends(get_db)):
+    """
+    Refresh the one-time password (OTP) for the given email, invalidate any active OTPs, store a new OTP, and send it by email.
+    
+    Given an OTPRequest containing an email address, this endpoint:
+    - Verifies the user exists (raises HTTP 404 if not).
+    - Marks any currently unused, unexpired OTPs for that email as used.
+    - Generates a new OTP that expires after OTP_EXPIRY_MINUTES, saves it to EmailOTP, and sends it to the email address.
+    - Returns an OTPResponse confirming that a new OTP was sent.
+    
+    Parameters:
+        payload (OTPRequest): Request payload; uses payload.email as the target address.
+    
+    Returns:
+        OTPResponse: Message confirming a new OTP was sent.
+    
+    Raises:
+        HTTPException: 404 Not Found if no user exists for the provided email.
+    """
     logger.info(f"Refreshing OTP for email: {payload.email}")
     # Use User directly
     user = db.query(User).filter(User.email == payload.email).first()

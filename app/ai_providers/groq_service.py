@@ -26,8 +26,17 @@ except Exception as e:
 
 def get_groq_category(description: str, amount: float = None, date: datetime = None) -> str:
     """
-    Uses Groq AI to predict an expense category based on its description.
-    Includes optional amount and date for richer context.
+    Predict an expense category from a description using the Groq AI chat API.
+    
+    Uses get_prompt("categorize_expense", ...) to build a prompt that may include optional amount and date context, then sends it to Groq (model "openai/gpt-oss-20b") and returns the assistant's trimmed response. On missing prompt or any API error the function falls back to returning "Miscellaneous".
+    
+    Parameters:
+        description (str): Short text describing the expense.
+        amount (float, optional): Numeric amount of the expense; included in the prompt when provided.
+        date (datetime, optional): Date of the expense; included in the prompt when provided.
+    
+    Returns:
+        str: Predicted expense category (or "Miscellaneous" when prompt generation fails or the API call errors).
     """
     prompt_template = get_prompt("categorize_expense", description=description, amount=amount, date=date)
     if not prompt_template:
@@ -58,8 +67,21 @@ def get_groq_insights(
     expenses_data: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     """
-    Uses Groq AI to generate insights based on expense data.
-    Handles optional start_date and end_date.
+    Generate structured expense insights for a user by calling Groq AI.
+    
+    Builds a prompt from the supplied user_id, optional start/end dates, and expenses_data, sends it to Groq's chat completions API, and returns the parsed JSON result as a dictionary.
+    
+    Parameters:
+        user_id (int): ID of the user to generate insights for.
+        start_date (Optional[datetime]): Inclusive start date for the expenses; treated as "N/A" when None.
+        end_date (Optional[datetime]): Inclusive end date for the expenses; treated as "N/A" when None.
+        expenses_data (List[Dict[str, Any]]): List of expense records used to generate insights.
+    
+    Returns:
+        Dict[str, Any]: Parsed insights dictionary produced by the model. On failure to build a prompt, API errors, or invalid JSON responses, returns a safe default dictionary with:
+          - total_spent (float): 0.0
+          - top_categories (List): empty list
+          - anomalies (List[str]): list containing an explanatory anomaly message
     """
     start_date_str = start_date.isoformat() if start_date else "N/A"
     end_date_str = end_date.isoformat() if end_date else "N/A"

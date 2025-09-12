@@ -13,6 +13,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Async lifespan context manager for the FastAPI application.
+    
+    Logs an informational message when the application starts and another when it shuts down.
+    Intended to be supplied to FastAPI(..., lifespan=lifespan).
+    """
     logger.info("Application starting up...")
     yield
     logger.info("Application shutting down...")
@@ -57,4 +63,10 @@ app.include_router(ai.router)
 # root endpoint for basic check
 @app.get("/")
 async def read_root():
+    """
+    Return a simple JSON welcome message for the API root endpoint.
+    
+    Returns:
+        dict: A JSON-serializable dictionary with a single key `"message"` containing a welcome string for the AI-Powered Expense Tracker API.
+    """
     return {"message": "Welcome to the AI-Powered Expense Tracker API"}

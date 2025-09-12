@@ -23,8 +23,16 @@ async def categorize_expense_endpoint(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Takes expense details and AI provider, returns AI-predicted category.
-    Requires authentication.
+    Categorize an expense using the requested AI provider and return the predicted category.
+    
+    Parameters:
+        request (CategorizeRequest): Contains `expense_details` (description, amount, date) and `ai_provider`.
+        
+    Returns:
+        str: Predicted category label produced by the AI provider.
+    
+    Raises:
+        HTTPException: Propagates HTTPException from downstream calls; raises a 500 HTTPException if AI categorization fails.
     """
     try:
         expense_details = request.expense_details
@@ -53,8 +61,18 @@ async def get_insights_endpoint(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Takes date range and AI provider, returns AI-generated insights for the current user.
-    Requires authentication.
+    Return AI-generated insights for the authenticated user over a given date range.
+    
+    Retrieves the current user's expenses between request.start_date and request.end_date, formats them for the AI service, and returns the insights produced by the specified AI provider.
+    
+    Parameters:
+        request (InsightsRequestWithProvider): Request body containing `start_date`, `end_date`, and `ai_provider`. Only `request` is documented here; dependencies (db, current_user) are injected by the framework.
+    
+    Returns:
+        InsightsResponse: Parsed AI-generated insights for the user and date range.
+    
+    Raises:
+        HTTPException: Raised with status 500 if expense retrieval or AI insights generation fails. Any HTTPException raised by downstream calls is re-raised.
     """
     user_id = current_user.id
     start_date = request.start_date
@@ -114,8 +132,20 @@ async def override_expense_category(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Allows a user to override the AI-suggested or existing category for an expense.
-    This is a partial update focused on the category field.
+    Override the category for a specific expense belonging to the authenticated user.
+    
+    Performs a partial update that replaces the expense's category with `new_category`. Raises
+    HTTPException with:
+    - 404 if the expense does not exist,
+    - 403 if the expense is not owned by the current user,
+    - 500 if the update operation fails.
+    
+    Parameters:
+        expense_id (int): ID of the expense to update.
+        new_category (str): New category value to set on the expense.
+    
+    Returns:
+        dict: A confirmation object with a human-readable detail message on success.
     """
     # Validate expense ownership
     db_expense = db.query(Expense).filter(Expense.id == expense_id).first()

@@ -35,6 +35,14 @@ class EmailOTP(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def is_expired(self):
+        """
+        Return True if the OTP has expired.
+        
+        Compares the current UTC time to the `expires_at` timestamp and returns True when the current UTC time is strictly later than `expires_at`, otherwise False.
+        
+        Returns:
+            bool: True if expired, False if still valid.
+        """
         return datetime.utcnow() > self.expires_at
 
 

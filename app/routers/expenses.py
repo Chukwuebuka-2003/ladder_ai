@@ -25,7 +25,11 @@ async def create_expense_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Add a new expense, associated with the current authenticated user."""
+    """
+    Create a new expense for the authenticated user.
+    
+    Associates the provided ExpenseCreate payload with the current user's ID and returns the created expense object. On unexpected failures this raises an HTTPException with status 500.
+    """
     try:
         # Pass the user_id to the service to associate the expense
         db_expense = create_expense(db=db, expense_create=expense_create, user_id=current_user.id)
@@ -41,7 +45,19 @@ async def get_expenses_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieve expenses for the current authenticated user."""
+    """
+    Retrieve a paginated list of expenses belonging to the authenticated user.
+    
+    Parameters:
+        skip (int): Number of records to skip for pagination (default 0).
+        limit (int): Maximum number of records to return (default 10).
+    
+    Returns:
+        List[ExpenseResponse]: Expenses owned by the current user, paginated by `skip` and `limit`.
+    
+    Raises:
+        HTTPException: 500 Internal Server Error if retrieval fails.
+    """
     try:
         # Filter expenses by current_user.id
         expenses = service_get_expenses(db=db, skip=skip, limit=limit, user_id=current_user.id)
@@ -56,7 +72,19 @@ async def get_expense_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieve a specific expense, ensuring it belongs to the current user."""
+    """
+    Retrieve an expense by ID and ensure it belongs to the authenticated user.
+    
+    Parameters:
+        expense_id (int): ID of the expense to retrieve.
+    
+    Returns:
+        The expense record (ExpenseResponse/ORM model) when found and owned by the current user.
+    
+    Raises:
+        HTTPException 404: If no expense with the given ID exists.
+        HTTPException 403: If the expense exists but is not owned by the current user.
+    """
     db_expense = get_expense_by_id(db=db, expense_id=expense_id)
     if db_expense is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
@@ -74,7 +102,15 @@ async def update_expense_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update an expense, ensuring it belongs to the current user."""
+    """
+    Update an existing expense owned by the authenticated user and return the updated record.
+    
+    Validates that the expense exists and belongs to the current user before applying updates via the service layer.
+    Raises HTTPException with status 404 if the expense is not found or could not be updated, and 403 if the current user is not the owner.
+    
+    Returns:
+        ExpenseResponse: The updated expense.
+    """
     # check if the expense belongs to the current user
     db_expense = get_expense_by_id(db=db, expense_id=expense_id)
     if db_expense is None:
@@ -95,7 +131,21 @@ async def delete_expense_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete an expense, ensuring it belongs to the current user."""
+    """
+    Delete an expense owned by the authenticated user.
+    
+    Deletes the expense identified by expense_id if it exists and belongs to the current_user. Returns a confirmation detail on success.
+    
+    Parameters:
+        expense_id (int): ID of the expense to delete.
+    
+    Returns:
+        dict: {"detail": "Expense deleted successfully"} on successful deletion.
+    
+    Raises:
+        HTTPException 404: If the expense does not exist or could not be deleted.
+        HTTPException 403: If the expense exists but is not owned by the current user.
+    """
     # check if the expense exists and belongs to the user
     db_expense = get_expense_by_id(db=db, expense_id=expense_id)
     if db_expense is None:

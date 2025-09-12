@@ -26,6 +26,19 @@ except Exception as e:
 
 
 def get_gemini_category(description: str, amount: float = None, date: datetime = None) -> str:
+    """
+    Classify an expense description into a single category using the Gemini model.
+    
+    Builds a prompt (template "categorize_expense") from the provided expense description, optional amount, and optional date, sends it to the Gemini model, and returns the model's predicted category as a stripped string. If prompt generation fails or the model call raises an error, returns the fallback category "Miscellaneous".
+    
+    Parameters:
+        description (str): Short free-text description of the expense.
+        amount (float | None): Optional expense amount; used to provide context to the prompt.
+        date (datetime | None): Optional expense date; used to provide context to the prompt.
+    
+    Returns:
+        str: Predicted category name, or "Miscellaneous" on prompt/model errors.
+    """
     prompt_template = get_prompt("categorize_expense", description=description, amount=amount, date=date)
     if not prompt_template:
         logger.error("Failed to get categorization prompt.")
@@ -48,10 +61,36 @@ def get_gemini_insights(
     expenses_data: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     """
-    Uses Gemini 2.5 Flash to generate insights based on expense data.
-    Ensures output is a strictly formatted JSON object matching InsightsResponse schema.
-    Always returns a dict with keys: total_spent, top_categories, anomalies.
-    Never returns strings or malformed data.
+    Generate structured insights from a user's expense data using Gemini (Gemini 2.5 Flash).
+    
+    This function requests a JSON-formatted insights response from the Gemini model and returns a validated
+    dictionary that always contains the keys: "total_spent", "top_categories", and "anomalies".
+    start_date and end_date are accepted as datetimes and converted to ISO strings for the prompt; if either
+    is None it will be represented as "N/A" in the prompt.
+    
+    Parameters:
+        user_id (int): Internal identifier for the user whose expenses are being analyzed.
+        start_date (Optional[datetime]): Start of the analysis window; None means "N/A" for the prompt.
+        end_date (Optional[datetime]): End of the analysis window; None means "N/A" for the prompt.
+        expenses_data (List[Dict[str, Any]]): List of expense records to include in the prompt. Each record
+            should be a mapping describing an expense (e.g., with keys such as "description", "amount",
+            "date", "category" — exact fields are consumed by the prompt template).
+    
+    Returns:
+        Dict[str, Any]: A validated insights object with the schema:
+            - total_spent (float): Non-negative total amount spent.
+            - top_categories (List[Dict[str, Any]]): Each item is an object containing at minimum:
+                - "category" (str)
+                - "amount" (number)
+            - anomalies (List[Dict[str, Any]]): Each anomaly is an object containing at minimum:
+                - "description" (str)
+                - "amount" (number)
+                - "category" (str)
+                - "reason" (str)
+    
+    On any failure to generate, parse, or validate the model output the function returns a safe default insights
+    dictionary (total_spent = 0.0, empty top_categories) and includes a single anomaly with category "system_error"
+    and a short reason explaining the failure mode. The function does not raise for model or parse failures.
     """
 
     # Format dates safely

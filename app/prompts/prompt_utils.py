@@ -14,8 +14,12 @@ _prompts_cache = {} # Simple in-memory cache for prompts
 
 def load_prompts():
     """
-    Loads prompts from the prompts.yaml file.
-    Uses a cache to avoid re-reading the file on every call.
+    Load prompts from the prompts.yaml file into an in-memory cache and return them.
+    
+    On first call this function reads PROMPTS_FILE_PATH and stores the parsed YAML in the module cache to avoid repeated file I/O. If the file is missing or cannot be parsed, the cache is set to an empty mapping and an empty dict is returned. Subsequent calls return the cached data.
+    
+    Returns:
+        dict: The loaded prompts mapping (parsed YAML) or an empty dict on error.
     """
     global _prompts_cache
     if not _prompts_cache:
@@ -33,16 +37,9 @@ def load_prompts():
 
 def get_prompt(key: str, **kwargs) -> str:
     """
-    Retrieves a prompt template by key from the loaded prompts and formats it
-    with provided keyword arguments.
-
-    Args:
-        key: The key of the prompt template (e.g., 'categorize_expense').
-        **kwargs: Keyword arguments to format the prompt string.
-
-    Returns:
-        The formatted prompt string, or an empty string if the prompt key is not found,
-        the prompts file could not be loaded, or if there was an error during formatting.
+    Return a prompt template identified by key formatted with provided keyword arguments.
+    
+    Looks up the template under the top-level 'prompts' mapping loaded by load_prompts(), converts any datetime kwargs to ISO 8601 strings, and formats the template using str.format(**kwargs). If the prompts file is not loaded, the 'prompts' root is missing, the key is not present, or formatting fails (including missing placeholders), the function logs the error and returns an empty string.
     """
     prompts_data = load_prompts()
     if not prompts_data or 'prompts' not in prompts_data:

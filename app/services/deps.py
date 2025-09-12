@@ -12,6 +12,17 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> User:
+    """
+    Resolve and return the currently authenticated User from an OAuth2 access token.
+    
+    Validates the provided access token using verify_access_token, extracts the user id from the token's "sub" claim, and loads the corresponding User from the database. Raises HTTP 401 Unauthorized if the token is invalid, the "sub" claim is missing, or no matching user is found.
+    
+    Returns:
+        User: The authenticated user loaded from the database.
+    
+    Raises:
+        fastapi.HTTPException: 401 Unauthorized for invalid token, missing user_id, or user not found.
+    """
     payload = verify_access_token(token)
     if not payload:
         raise HTTPException(

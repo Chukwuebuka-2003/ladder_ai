@@ -9,6 +9,20 @@ FASTAPI_URL = "http://localhost:8000"
 
 # Authentication Functions
 def login_user(email, password):
+    """
+    Attempt to authenticate a user by POSTing credentials to the backend /login endpoint.
+    
+    Sends a POST request with the provided email and password to FASTAPI_URL + "/login".
+    On success returns the parsed JSON response (typically containing an access token and user info).
+    On network/request errors or when the response is not valid JSON, displays an error message via Streamlit and returns None.
+    
+    Parameters:
+        email (str): User email address used for authentication.
+        password (str): User password.
+    
+    Returns:
+        dict | None: Parsed JSON response on success, or None if the request failed or the response could not be decoded.
+    """
     try:
         response = requests.post(f"{FASTAPI_URL}/login", json={"email": email, "password": password})
         response.raise_for_status()
@@ -22,6 +36,20 @@ def login_user(email, password):
 
 
 def signup_user(email, password, username):
+    """
+    Create a new user account by POSTing username, email, and password to the backend /signup endpoint.
+    
+    Parameters:
+        email (str): User email address sent in the request body.
+        password (str): User password sent in the request body.
+        username (str): Desired username sent in the request body.
+    
+    Returns:
+        dict or None: Parsed JSON response from the server on success; None if the HTTP request fails or the response contains invalid JSON.
+    
+    Side effects:
+        Displays a Streamlit error message when the request fails or the response cannot be parsed.
+    """
     try:
         response = requests.post(f"{FASTAPI_URL}/signup",
                                  json={"username": username, "email": email, "password": password})
@@ -36,6 +64,19 @@ def signup_user(email, password, username):
 
 
 def verify_otp(email, otp):
+    """
+    Verify a one-time password (OTP) for the given email by calling the backend /verify-otp endpoint.
+    
+    Parameters:
+        email (str): The user's email address to verify.
+        otp (str | int): The OTP/code provided by the user.
+    
+    Returns:
+        dict | None: Parsed JSON response from the server on success; None if the request fails or the response is invalid.
+    
+    Side effects:
+        Displays user-facing error messages using Streamlit's st.error on network/request failures or invalid JSON responses.
+    """
     try:
         response = requests.post(f"{FASTAPI_URL}/verify-otp", json={"email": email, "code": otp})
         response.raise_for_status()
@@ -50,6 +91,31 @@ def verify_otp(email, otp):
 
 # --- API Request Helper ---
 def make_api_request(method, endpoint, data=None):
+    """
+    Send an HTTP request to the backend API and return the parsed JSON response.
+    
+    Builds the full URL from FASTAPI_URL and the provided endpoint, attaches an
+    Authorization header when a session token exists, and dispatches the request
+    using the specified HTTP method. On success returns the decoded JSON object;
+    on failure returns None.
+    
+    Parameters:
+        method (str): HTTP method name (e.g., "GET", "POST", "PUT", "DELETE").
+        endpoint (str): API path appended to FASTAPI_URL (must begin with '/').
+        data (dict|None): Payload for the request. Used as query params for GET and
+            as JSON body for POST/PUT. Ignored for DELETE.
+    
+    Returns:
+        dict|list|None: Parsed JSON response from the server, or None on error.
+    
+    Side effects:
+        - If a 401 Unauthorized is returned while a session token exists, clears
+          authentication-related session state keys (token, logged_in,
+          user_email_for_otp, otp_verification_pending), shows a warning, and
+          triggers a Streamlit rerun to force re-authentication.
+        - Displays user-facing error messages via Streamlit on request or JSON
+          parsing failures.
+    """
     headers = {}
     if st.session_state.get("token"):
         headers["Authorization"] = f"Bearer {st.session_state.token}"
@@ -88,7 +154,18 @@ def make_api_request(method, endpoint, data=None):
 
 # --- Helper: Format ISO Date to Readable String ---
 def format_date(iso_string):
-    """Convert ISO 8601 string to human-readable format: 'Sep 15, 2025, 10:30 AM'"""
+    """
+    Convert an ISO 8601 timestamp string to a human-readable format.
+    
+    If parsing succeeds, returns a string like "Sep 15, 2025, 10:30 AM".
+    If parsing fails, returns the original input unchanged.
+    
+    Parameters:
+        iso_string (str): ISO 8601 datetime string (e.g., "2025-09-15T10:30:00Z" or with timezone offset).
+    
+    Returns:
+        str: Formatted datetime ("Mon DD, YYYY, HH:MM AM/PM") or the original input on parse failure.
+    """
     try:
         dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
         return dt.strftime("%b %d, %Y, %I:%M %p")

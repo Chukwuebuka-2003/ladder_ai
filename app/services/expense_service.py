@@ -12,7 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_date(raw_date) -> Optional[date]:
-    """Helper to safely parse raw date input into a date object."""
+    """
+    Parse various raw date inputs into a datetime.date.
+    
+    Accepts a datetime (returns its date), a date (returned as-is), or a string in "YYYY-MM-DD" format (parsed to a date). Returns None for unsupported types or if string parsing fails (a warning is logged on parse failure).
+    """
     if isinstance(raw_date, datetime):
         return raw_date.date()
     elif isinstance(raw_date, date):
@@ -28,8 +32,18 @@ def _parse_date(raw_date) -> Optional[date]:
 
 def create_expense(db: Session, expense_create: ExpenseCreate, user_id: int) -> Expense:
     """
-    Creates a new expense entry, performs AI-based categorization if needed,
-    and ensures date is correctly formatted before saving.
+    Create and persist a new Expense, normalizing the date and optionally deriving its category via AI.
+    
+    If expense_create.date cannot be parsed, today's date is used. When no category is provided and a valid date exists,
+    the function attempts to categorize the expense using the AI service; AI failures are logged and the category falls
+    back to "Miscellaneous". The Expense is added to the database session, committed, and refreshed before being returned.
+    
+    Parameters:
+        expense_create: Input schema containing amount, description, optional category, and optional date (string/date/datetime).
+        user_id: ID of the user who owns the expense.
+    
+    Returns:
+        Expense: The newly created and persisted Expense instance.
     """
     expense_date = _parse_date(expense_create.date) or date.today()
 
@@ -60,7 +74,19 @@ def create_expense(db: Session, expense_create: ExpenseCreate, user_id: int) -> 
 
 
 def get_expenses(db: Session, skip: int = 0, limit: int = 10, user_id: Optional[int] = None) -> List[Expense]:
-    """Fetches paginated list of expenses, optionally filtered by user."""
+    """
+    Return a paginated list of Expense records, optionally restricted to a specific user.
+    
+    If user_id is provided, only expenses belonging to that user are returned. Results are offset by `skip` and limited to `limit` rows for pagination.
+    
+    Parameters:
+        skip (int): Number of records to skip (offset).
+        limit (int): Maximum number of records to return.
+        user_id (Optional[int]): If set, filter expenses to this user's ID.
+    
+    Returns:
+        List[Expense]: List of Expense instances matching the query.
+    """
     query = db.query(Expense)
     if user_id is not None:
         query = query.filter(Expense.user_id == user_id)
@@ -68,7 +94,14 @@ def get_expenses(db: Session, skip: int = 0, limit: int = 10, user_id: Optional[
 
 
 def get_expense_by_id(db: Session, expense_id: int, user_id: Optional[int] = None) -> Optional[Expense]:
-    """Fetches an expense by ID, optionally filtered by user."""
+    """
+    Return the Expense with the given ID, optionally constrained to the specified user.
+    
+    If a matching record is found it is returned; otherwise None is returned.
+    
+    Returns:
+        Optional[Expense]: The matching Expense instance or None if not found.
+    """
     query = db.query(Expense).filter(Expense.id == expense_id)
     if user_id is not None:
         query = query.filter(Expense.user_id == user_id)
@@ -76,7 +109,15 @@ def get_expense_by_id(db: Session, expense_id: int, user_id: Optional[int] = Non
 
 
 def update_expense(db: Session, expense_id: int, expense_update: ExpenseUpdate, user_id: Optional[int] = None) -> Optional[Expense]:
-    """Updates an existing expense, applying AI categorization when appropriate."""
+    """
+    Update an existing Expense and optionally infer its category using the AI categorizer.
+    
+    If the expense is not found (optionally scoped to user_id) the function returns None.
+    - If `date` is provided in `expense_update`, it is parsed; a successfully parsed date replaces the stored date and is used for AI categorization, while an unparsable date sets the stored date to None.
+    - If `category` is not provided in `expense_update`, the current stored category is None, and a valid date exists (after parsing), the function attempts to set `category` via `categorize_expense_with_ai` using the updated or existing description and amount. AI failures are logged and do not abort the update.
+    - Fields present in `expense_update` (except `date` and `category`, which are handled as described) are applied to the stored expense.
+    Returns the updated Expense on success or None if the target expense does not exist.
+    """
     query = db.query(Expense).filter(Expense.id == expense_id)
     if user_id is not None:
         query = query.filter(Expense.user_id == user_id)

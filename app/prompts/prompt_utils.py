@@ -1,4 +1,3 @@
-# /home/type-shit/expense_tracker/app/prompt/prompt_utils.py
 
 import yaml
 import os

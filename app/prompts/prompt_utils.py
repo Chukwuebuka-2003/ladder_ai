@@ -65,7 +65,7 @@ def get_prompt(key: str, **kwargs) -> str:
 
         return template.format(**formatted_kwargs)
     except KeyError as e:
-        # Attempt to show missing key, but be mindful of complex templates
+     
         try:
             missing_key_info = f"Unknown (check template for required keys)"
             if '{' in template:

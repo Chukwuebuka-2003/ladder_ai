@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Integer,
     Float,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import ForeignKey
@@ -62,6 +63,8 @@ class Budget(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
 
     user = relationship("User", back_populates="budgets")
+
+    __table_args__ = (UniqueConstraint('user_id', 'category', 'start_date', 'end_date', name='_user_category_date_uc'),)
 
 
 # Define relationships on the User class

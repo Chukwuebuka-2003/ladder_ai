@@ -21,6 +21,8 @@ prompts:
 
     IMPORTANT INSTRUCTIONS:
     - Return ONLY a valid JSON object with exactly these keys: "total_spent", "top_categories", "anomalies".
+    - The "top_categories" key must be a list of JSON objects, where each object has a "category" (string) and "amount" (float) key.
+    - The "anomalies" key must be a list of JSON objects, where each object has a "description" (string) and "reason" (string) key.
     - Do NOT include any explanations, markdown, comments, or text before or after the JSON.
     - Ensure all values are properly escaped and valid JSON.
 

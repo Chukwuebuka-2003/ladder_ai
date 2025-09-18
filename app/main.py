@@ -35,6 +35,7 @@ origins = [
     "http://localhost:8501",
     "https://ladderai.streamlit.app",
     "http://127.0.0.1:8001",
+    "https://ladder-ui.vercel.app"
 ]
 
 app.add_middleware(

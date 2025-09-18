@@ -1,4 +1,3 @@
-# /home/type-shit/expense_tracker/app/schemas.py
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -23,7 +22,7 @@ class LoginSchema(BaseModel):
     email: EmailStr
     password: str
 
-# --- NEW: Schemas for Auth ---
+# Schemas for Auth 
 class UserProfileResponse(BaseModel):
     id: int
     username: str
@@ -137,7 +136,7 @@ class InsightsRequest(BaseModel):
 class InsightsRequestWithProvider(InsightsRequest):
     ai_provider: AIProvider = AIProvider.GROQ
 
-# --- MODIFIED: New schema for TopCategory and updated InsightsResponse ---
+# schema for TopCategory and updated InsightsResponse ---
 class TopCategory(BaseModel):
     category: str
     amount: float

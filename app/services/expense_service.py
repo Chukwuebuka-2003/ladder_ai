@@ -37,16 +37,27 @@ def create_expense_from_receipt(db: Session, image_data: bytes, user_id: int) ->
     receipt_group_id = str(uuid.uuid4())
     created_expenses = []
 
-    for item in extracted_data["items"]:
-        expense_create = ExpenseCreate(
-            amount=item["amount"],
-            description=item["description"],
-            date=datetime.now(),
-            receipt_id=str(uuid.uuid4()),
-            receipt_group_id=receipt_group_id
-        )
-        expense = create_expense(db=db, expense_create=expense_create, user_id=user_id)
-        created_expenses.append(expense)
+    try:
+        for item in extracted_data["items"]:
+            expense_create = ExpenseCreate(
+                amount=item["amount"],
+                description=item["description"],
+                date=datetime.now(),
+                receipt_id=str(uuid.uuid4()),
+                receipt_group_id=receipt_group_id
+            )
+            expense = create_expense(db=db, expense_create=expense_create, user_id=user_id)
+            created_expenses.append(expense)
+
+        db.commit()
+
+        for expense in created_expenses:
+            db.refresh(expense)
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating expenses from receipt: {e}")
+        raise ValueError("Failed to create one or more expenses from the receipt.")
 
     return created_expenses
 

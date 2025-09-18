@@ -2,20 +2,26 @@ import yaml
 import os
 import logging
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
 PROMPTS_FILE_PATH = os.path.join(os.path.dirname(__file__), 'prompts.yaml')
+_cached_prompts: Optional[Dict[str, Any]] = None
 
 def load_prompts():
     """
-    Loads prompts from the prompts.yaml file on every call.
+    Loads prompts from the prompts.yaml file.
     """
+    global _cached_prompts
+    if _cached_prompts is not None:
+        return _cached_prompts
+
     try:
         with open(PROMPTS_FILE_PATH, 'r') as f:
             prompts_data = yaml.safe_load(f)
         logger.info(f"Successfully loaded prompts from {PROMPTS_FILE_PATH}")
+        _cached_prompts = prompts_data
         return prompts_data
     except FileNotFoundError:
         logger.error(f"Prompts file not found at {PROMPTS_FILE_PATH}. Please ensure it exists.")

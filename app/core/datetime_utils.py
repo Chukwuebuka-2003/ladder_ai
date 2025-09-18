@@ -31,13 +31,13 @@ def parse_time_range(time_range_str: Optional[str]) -> Tuple[datetime, datetime]
 
     time_range_str_lower = time_range_str.lower()
 
-    # --- UPGRADED: Try to parse a specific date string first ---
+
     specific_date = parse_date_flexible(time_range_str.split('T')[0])
     if specific_date:
         start_date = specific_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = specific_date.replace(hour=23, minute=59, second=59, microsecond=999999)
         return start_date, end_date
-    # --- END UPGRADE ---
+
 
     if "today" in time_range_str_lower:
         start_date = today_start

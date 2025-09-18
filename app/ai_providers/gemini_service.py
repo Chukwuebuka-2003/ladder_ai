@@ -137,6 +137,18 @@ def get_gemini_insights(
         if not isinstance(insights, dict) or not required_keys.issubset(insights.keys()):
             raise ValueError(f"Missing required keys. Got: {list(insights.keys())}")
 
+        # Data validation and transformation for 'anomalies'
+        if "anomalies" in insights and isinstance(insights["anomalies"], list):
+            transformed_anomalies = []
+            for item in insights["anomalies"]:
+                if isinstance(item, str):
+                    # If the item is a string, convert it to the expected dict format
+                    transformed_anomalies.append({"description": item, "reason": "AI-detected anomaly"})
+                elif isinstance(item, dict) and "description" in item:
+                    # If it's a dict and has the 'description' key, keep it
+                    transformed_anomalies.append(item)
+            insights["anomalies"] = transformed_anomalies
+
         return insights
 
     except (json.JSONDecodeError, ValueError) as e:

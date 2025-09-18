@@ -22,7 +22,7 @@ class LoginSchema(BaseModel):
     email: EmailStr
     password: str
 
-# Schemas for Auth 
+# Schemas for Auth
 class UserProfileResponse(BaseModel):
     id: int
     username: str
@@ -136,7 +136,7 @@ class InsightsRequest(BaseModel):
 class InsightsRequestWithProvider(InsightsRequest):
     ai_provider: AIProvider = AIProvider.GROQ
 
-# schema for TopCategory and updated InsightsResponse ---
+# schema for TopCategory and updated InsightsResponse
 class TopCategory(BaseModel):
     category: str
     amount: float

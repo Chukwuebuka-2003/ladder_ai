@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, date
+import uuid
 
 from models import Expense, User
 from schemas import ExpenseCreate, ExpenseUpdate
-from services.ai_service import categorize_expense_with_ai
-
+from services.ai_service import categorize_expense_with_ai, extract_text_from_receipt_with_ai
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,31 @@ def _parse_date(raw_date) -> Optional[date]:
     return None
 
 
+def create_expense_from_receipt(db: Session, image_data: bytes, user_id: int) -> List[Expense]:
+    """
+    Creates new expenses from a receipt image by extracting line items.
+    """
+    extracted_data = extract_text_from_receipt_with_ai(image_data=image_data)
+    if not extracted_data or "items" not in extracted_data:
+        raise ValueError("Failed to extract expense details from the receipt.")
+
+    receipt_group_id = str(uuid.uuid4())
+    created_expenses = []
+
+    for item in extracted_data["items"]:
+        expense_create = ExpenseCreate(
+            amount=item["amount"],
+            description=item["description"],
+            date=datetime.now(),
+            receipt_id=str(uuid.uuid4()),
+            receipt_group_id=receipt_group_id
+        )
+        expense = create_expense(db=db, expense_create=expense_create, user_id=user_id)
+        created_expenses.append(expense)
+
+    return created_expenses
+
+
 def create_expense(db: Session, expense_create: ExpenseCreate, user_id: int) -> Expense:
     """
     Creates a new expense entry, performs AI-based categorization if needed,
@@ -39,6 +64,8 @@ def create_expense(db: Session, expense_create: ExpenseCreate, user_id: int) -> 
         category=expense_create.category,
         date=expense_date,
         user_id=user_id,
+        receipt_id=expense_create.receipt_id,
+        receipt_group_id=expense_create.receipt_group_id
     )
 
     # AI Categorization if category is missing

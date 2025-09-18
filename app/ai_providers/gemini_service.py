@@ -17,12 +17,68 @@ if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY must be set.")
 
 try:
-    # ✅ Use the correct model name — verify this matches what's available in your Google Cloud project
-    gemini_model = genai.GenerativeModel('gemini-2.5-flash')  # ← Recommended: stable, reliable
+    gemini_model = genai.GenerativeModel('gemini-2.5-flash')
     logger.info("Gemini 2.5 Flash model initialized successfully.")
 except Exception as e:
     logger.error(f"Failed to initialize Gemini model: {e}")
     raise
+
+def get_gemini_suggestions(
+    current_period_expenses: List[Dict[str, Any]],
+    previous_period_expenses: List[Dict[str, Any]],
+    current_start_date: str,
+    current_end_date: str,
+    previous_start_date: str,
+    previous_end_date: str
+) -> str:
+    """Uses Gemini to generate spending suggestions based on comparative data."""
+    prompt = get_prompt(
+        "generate_suggestions",
+        current_period_expenses=json.dumps(current_period_expenses),
+        previous_period_expenses=json.dumps(previous_period_expenses),
+        current_start_date=current_start_date,
+        current_end_date=current_end_date,
+        previous_start_date=previous_start_date,
+        previous_end_date=previous_end_date
+    )
+    if not prompt:
+        logger.error("Failed to get suggestion generation prompt.")
+        return "I'm currently unable to generate suggestions. Please try again later."
+
+    try:
+        response = gemini_model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        logger.error(f"Error calling Gemini API for suggestions: {e}")
+        return "I encountered an error while thinking of suggestions. Please try again."
+
+def extract_text_from_receipt(image_data: bytes) -> Dict[str, Any]:
+    """Uses Gemini 2.5 Flash to extract text from a receipt image."""
+    prompt = get_prompt("extract_receipt_data")
+    if not prompt:
+        logger.error("Failed to get receipt extraction prompt.")
+        return {}
+
+    try:
+        response = gemini_model.generate_content([prompt, {"inline_data": {"data": image_data, "mime_type": "image/jpeg"}}])
+        json_str = response.text.strip()
+        start_json = json_str.find('{')
+        end_json = json_str.rfind('}') + 1
+
+        if start_json == -1 or end_json == -1:
+            raise ValueError("No JSON object found in Gemini response.")
+
+        json_str = json_str[start_json:end_json]
+        expense_details = json.loads(json_str)
+
+        if "items" not in expense_details or not isinstance(expense_details["items"], list):
+            raise ValueError(f"Missing or invalid 'items' key in response. Got: {expense_details}")
+
+        return expense_details
+
+    except Exception as e:
+        logger.error(f"Error calling Gemini API for receipt extraction: {e}")
+        return {}
 
 
 def get_gemini_category(description: str, amount: float = None, date: datetime = None) -> str:
@@ -49,16 +105,10 @@ def get_gemini_insights(
 ) -> Dict[str, Any]:
     """
     Uses Gemini 2.5 Flash to generate insights based on expense data.
-    Ensures output is a strictly formatted JSON object matching InsightsResponse schema.
-    Always returns a dict with keys: total_spent, top_categories, anomalies.
-    Never returns strings or malformed data.
     """
-
-    # Format dates safely
     start_date_str = start_date.isoformat() if start_date else "N/A"
     end_date_str = end_date.isoformat() if end_date else "N/A"
 
-    # Get prompt template
     prompt_template = get_prompt(
         "generate_insights",
         user_id=user_id,
@@ -69,106 +119,29 @@ def get_gemini_insights(
 
     if not prompt_template:
         logger.error("Failed to get insights prompt.")
-        return {
-            "total_spent": 0.0,
-            "top_categories": [],
-            "anomalies": [
-                {
-                    "description": "System error: Prompt generation failed.",
-                    "amount": 0.0,
-                    "category": "system_error",
-                    "reason": "Prompt template could not be retrieved."
-                }
-            ]
-        }
+        return {"total_spent": 0.0, "top_categories": [], "anomalies": []}
 
     try:
-        # ✅ Generate content
         response = gemini_model.generate_content(prompt_template)
         raw_response = response.text.strip()
-        logger.info(f"Gemini raw response for user {user_id}: {raw_response[:300]}...")
 
-        # ✅ STEP 1: Extract ONLY the JSON block between first { and last }
         start_json = raw_response.find('{')
         end_json = raw_response.rfind('}') + 1
-
         if start_json == -1 or end_json == -1:
             raise ValueError("No JSON object found in Gemini response.")
 
         json_str = raw_response[start_json:end_json]
-
-        # ✅ STEP 2: Parse JSON
         insights = json.loads(json_str)
 
-        # ✅ STEP 3: Validate structure before returning
         required_keys = {"total_spent", "top_categories", "anomalies"}
         if not isinstance(insights, dict) or not required_keys.issubset(insights.keys()):
             raise ValueError(f"Missing required keys. Got: {list(insights.keys())}")
 
-        # ✅ Validate types
-        if not isinstance(insights["total_spent"], (int, float)) or insights["total_spent"] < 0:
-            raise ValueError("total_spent must be a non-negative number.")
-
-        if not isinstance(insights["top_categories"], list):
-            raise ValueError("top_categories must be a list.")
-
-        if not isinstance(insights["anomalies"], list):
-            raise ValueError("anomalies must be a list.")
-
-        # ✅ Optional: Enforce structure of each item in top_categories
-        for item in insights["top_categories"]:
-            if not isinstance(item, dict) or not all(k in item for k in ("category", "amount")):
-                raise ValueError("Each top_category item must have 'category' and 'amount' keys.")
-
-        # ✅ Optional: Enforce structure of each anomaly
-        for item in insights["anomalies"]:
-            if not isinstance(item, dict) or not all(k in item for k in ("description", "amount", "category", "reason")):
-                raise ValueError("Each anomaly item must have 'description', 'amount', 'category', and 'reason' keys.")
-
-        logger.info(f"Gemini insights successfully parsed for user {user_id}.")
         return insights
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Gemini response is not valid JSON: {e}. Raw response: {raw_response}")
-        return {
-            "total_spent": 0.0,
-            "top_categories": [],
-            "anomalies": [
-                {
-                    "description": "AI response could not be parsed as valid JSON.",
-                    "amount": 0.0,
-                    "category": "system_error",
-                    "reason": f"JSON decode error: {str(e)[:150]}"
-                }
-            ]
-        }
-
-    except ValueError as e:
+    except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"Invalid structure in Gemini response: {e}")
-        return {
-            "total_spent": 0.0,
-            "top_categories": [],
-            "anomalies": [
-                {
-                    "description": "AI returned malformed data structure.",
-                    "amount": 0.0,
-                    "category": "system_error",
-                    "reason": f"Structure validation failed: {str(e)[:150]}"
-                }
-            ]
-        }
-
+        return {"total_spent": 0.0, "top_categories": [], "anomalies": [{"description": "AI response could not be parsed.", "reason": str(e)}]}
     except Exception as e:
-        logger.error(f"Unexpected error in Gemini insights for user {user_id}: {e}")
-        return {
-            "total_spent": 0.0,
-            "top_categories": [],
-            "anomalies": [
-                {
-                    "description": "AI service encountered an unexpected error.",
-                    "amount": 0.0,
-                    "category": "system_error",
-                    "reason": f"General error: {str(e)[:150]}"
-                }
-            ]
-        }
+        logger.error(f"Unexpected error in Gemini insights: {e}")
+        return {"total_spent": 0.0, "top_categories": [], "anomalies": [{"description": "An unexpected AI error occurred.", "reason": str(e)}]}

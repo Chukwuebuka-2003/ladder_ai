@@ -1,6 +1,17 @@
 prompts:
   categorize_expense: 'Given the expense description "{description}" with amount {amount} on {date}, predict the most suitable category. Respond with ONLY the category name. If you are unsure, respond with "Miscellaneous". Possible Categories: Groceries, Dining Out, Transportation, Utilities, Rent/Mortgage, Entertainment, Shopping, Health, Travel, Education, Other.'
 
+  extract_receipt_data: |-
+    Analyze the following receipt image and extract the line items.
+
+    IMPORTANT INSTRUCTIONS:
+    - Return ONLY a valid JSON object with a single key: "items".
+    - The value of "items" must be a list of objects, where each object has the following keys: "description", "amount".
+    - Do NOT include any explanations, markdown, comments, or text before or after the JSON.
+    - description must be a string.
+    - amount must be a number (float or integer).
+
+    JSON Output:
   generate_insights: |-
     Analyze the following expense data for user ID {user_id} between {start_date} and {end_date}.
     Provide a summary including total spending, top spending categories, and any potential anomalies.
@@ -11,11 +22,61 @@ prompts:
     IMPORTANT INSTRUCTIONS:
     - Return ONLY a valid JSON object with exactly these keys: "total_spent", "top_categories", "anomalies".
     - Do NOT include any explanations, markdown, comments, or text before or after the JSON.
-    - Do NOT use backticks (```) or ```json``` wrappers.
-    - total_spent must be a number (float or integer).
-    - top_categories must be a list of objects, each with exactly two keys: "category" (string) and "amount" (number).
-    - anomalies must be a list of objects, each with exactly four keys: "description" (string), "amount" (number), "category" (string), and "reason" (string).
-    - If no anomalies exist, return an empty list: [].
     - Ensure all values are properly escaped and valid JSON.
+
+    JSON Output:
+
+  generate_suggestions: |-
+    You are an expert financial advisor. Analyze the user's spending data from two periods: the current period and the previous period.
+    Compare the spending patterns and provide one or two actionable suggestions for how the user could save money.
+    Be specific and encouraging. Base your suggestions on significant changes in spending categories.
+
+    Current Period Data ({current_start_date} to {current_end_date}):
+    {current_period_expenses}
+
+    Previous Period Data ({previous_start_date} to {previous_end_date}):
+    {previous_period_expenses}
+
+    IMPORTANT INSTRUCTIONS:
+    - Return ONLY a single, well-written paragraph with your suggestions. Do not use lists or bullet points.
+    - Do not return JSON.
+
+    Your Suggestion:
+
+  natural_language_understanding: |-
+    You are an expert NLU system. Analyze the user's message to understand their intent and extract key entities for querying an expense database. You MUST respond with ONLY a valid JSON object.
+
+    The user's message is: "{user_message}"
+
+    --- INTENTS ---
+    1. `add_expense`: The user wants to record a new expense.
+    2. `query`: The user is asking a specific question about their spending.
+    3. `get_insights`: The user wants a general, AI-driven summary.
+    4. `get_comprehensive_summary`: The user is asking for a detailed summary with multiple specific points.
+    5. `get_suggestions`: The user is asking for advice or recommendations on their spending.
+    6. `greeting`: The user is saying hello.
+    7. `unknown`: The intent is unclear.
+
+    --- ENTITIES for the `query` intent ---
+    - `target` (string): What the user is asking about. Can be "item", "transaction", "category", or a specific item/category name.
+    - `operation` (string): The type of query. Can be "highest", "lowest", "total", "list", "top", "search".
+    - `time_range` (string, optional): The time period (e.g., "this month", "last week").
+    - `limit` (integer, optional): The number of items to return (e.g., for "top 5").
+
+    --- EXAMPLES ---
+    - User Message: "log $25 for pizza"
+      JSON: {{"intent": "add_expense", "entities": {{"amount": 25, "description": "pizza"}}}}
+    - User Message: "what is the most expensive thing I bought?"
+      JSON: {{"intent": "query", "entities": {{"target": "item", "operation": "highest"}}}}
+    - User Message: "did I buy Roasted Chicken?"
+      JSON: {{"intent": "query", "entities": {{"target": "Roasted Chicken", "operation": "search"}}}}
+    - User Message: "give me a detailed summary of my expenses"
+      JSON: {{"intent": "get_comprehensive_summary", "entities": {{}}}}
+    - User Message: "any suggestions for me?"
+      JSON: {{"intent": "get_suggestions", "entities": {{}}}}
+    - User Message: "hey there"
+      JSON: {{"intent": "greeting", "entities": {{}}}}
+
+    Now, process the user's message provided at the top.
 
     JSON Output:

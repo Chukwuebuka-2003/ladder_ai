@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from sqlalchemy.orm import Session
 import logging
 from contextlib import asynccontextmanager
-from fastapi.middleware.cors import CORSMiddleware # Import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers
-from routers import auth, expenses, ai
+from routers import auth, expenses, ai, chat, budget, trends
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -32,23 +32,29 @@ app = FastAPI(
 
 # CORS Configuration
 origins = [
-    "http://localhost:8501",  # For Streamlit development server
-    "https://ladderai.streamlit.app" # streamlit production server
+    "http://localhost:8501",
+    "https://ladderai.streamlit.app",
+    "http://127.0.0.1:8001",
+    "https://ladder-ui.vercel.app"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,           # List of origins allowed to connect
-    allow_credentials=True,        # Allow cookies to be sent with requests
-    allow_methods=["*"],           # Allow all methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],           # Allow all headers
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
-# Include routers
-app.include_router(auth.router)
-app.include_router(expenses.router)
-app.include_router(ai.router)
+# Include routers with correct prefixes
+app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(expenses.router, prefix="/expenses", tags=["Expenses"])
+app.include_router(ai.router, prefix="/ai", tags=["AI"])
+app.include_router(chat.router, prefix="/chat", tags=["Chat"])
+app.include_router(budget.router, prefix="/budgets", tags=["Budgets"])
+app.include_router(trends.router, prefix="/trends", tags=["Trends"])
+
 
 # root endpoint for basic check
 @app.get("/")

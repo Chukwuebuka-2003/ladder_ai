@@ -1,4 +1,3 @@
-# /home/type-shit/expense_tracker/app/schemas.py
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -23,7 +22,7 @@ class LoginSchema(BaseModel):
     email: EmailStr
     password: str
 
-# --- NEW: Schemas for Auth ---
+# Schemas for Auth
 class UserProfileResponse(BaseModel):
     id: int
     username: str
@@ -50,7 +49,7 @@ class OTPResponse(BaseModel):
 class OTPVerify(BaseModel):
     email: EmailStr
     code: str
-# --- End of NEW Schemas for Auth ---
+
 
 
 # Expense Schemas
@@ -61,7 +60,8 @@ class ExpenseBase(BaseModel):
     date: datetime
 
 class ExpenseCreate(ExpenseBase):
-    pass
+    receipt_id: Optional[str] = None
+    receipt_group_id: Optional[str] = None
 
 class ExpenseUpdate(BaseModel):
     amount: Optional[float] = None
@@ -72,9 +72,46 @@ class ExpenseUpdate(BaseModel):
 class ExpenseResponse(ExpenseBase):
     id: int
     user_id: int
+    receipt_id: Optional[str] = None
+    receipt_group_id: Optional[str] = None
 
     class Config:
         orm_mode = True
+
+
+#budget schemas
+class BudgetBase(BaseModel):
+    category: str
+    amount: float
+    start_date: datetime
+    end_date: datetime
+
+class BudgetCreate(BudgetBase):
+    pass
+
+class BudgetUpdate(BaseModel):
+    category: Optional[str] = None
+    amount: Optional[float] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+class BudgetResponse(BudgetBase):
+    id: int
+    user_id: int
+
+    class Config:
+        orm_mode = True
+
+
+# trend schemas
+class MonthlyTrendDataPoint(BaseModel):
+    year: int
+    month: int
+    total_spent: float
+
+class MonthlyTrendResponse(BaseModel):
+    data: List[MonthlyTrendDataPoint]
+
 
 # AI Schemas
 
@@ -99,21 +136,26 @@ class InsightsRequest(BaseModel):
 class InsightsRequestWithProvider(InsightsRequest):
     ai_provider: AIProvider = AIProvider.GROQ
 
-# --- MODIFIED: New schema for TopCategory and updated InsightsResponse ---
+# schema for TopCategory and updated InsightsResponse
 class TopCategory(BaseModel):
     category: str
     amount: float
 
 class InsightsResponse(BaseModel):
     total_spent: float
-    top_categories: List[TopCategory] # Changed to List[TopCategory]
+    top_categories: List[TopCategory]
     anomalies: List[Dict[str, Any]]
-# --- End of MODIFIED Schemas ---
 
-# --- NEW: SignupRequest Schema ---
-# Assuming SignupRequest is needed for the /signup endpoint
+
 class SignupRequest(BaseModel):
     username: str
     email: EmailStr
     password: str
-# --- End of NEW SignupRequest ---
+
+class ChatMessage(BaseModel):
+    """incoming messagfe from a user"""
+    message: str
+
+class ChatResponse(BaseModel):
+    """outgoing message from the app to a user"""
+    message: str

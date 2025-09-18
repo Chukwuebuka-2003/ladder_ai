@@ -16,7 +16,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.post("/ai/categorize/", response_model=str)
+@router.post("/categorize", response_model=str)
 async def categorize_expense_endpoint(
     request: CategorizeRequest,
     db: Session = Depends(get_db),
@@ -46,7 +46,7 @@ async def categorize_expense_endpoint(
         )
 
 
-@router.post("/ai/insights/", response_model=InsightsResponse)
+@router.post("/insights", response_model=InsightsResponse)
 async def get_insights_endpoint(
     request: InsightsRequestWithProvider,
     db: Session = Depends(get_db),
@@ -104,39 +104,3 @@ async def get_insights_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate AI insights. Please try again later."
         )
-
-
-@router.put("/expenses/{expense_id}/override_category/", status_code=status.HTTP_200_OK)
-async def override_expense_category(
-    expense_id: int,
-    new_category: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Allows a user to override the AI-suggested or existing category for an expense.
-    This is a partial update focused on the category field.
-    """
-    # Validate expense ownership
-    db_expense = db.query(Expense).filter(Expense.id == expense_id).first()
-    if not db_expense:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found.")
-    if db_expense.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to update this expense.")
-
-    # Use existing service to update category
-    update_schema = ExpenseUpdate(category=new_category)
-    updated_expense = update_expense(
-        db=db,
-        expense_id=expense_id,
-        expense_update=update_schema,
-        user_id=current_user.id
-    )
-
-    if not updated_expense:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update expense category."
-        )
-
-    return {"detail": f"Expense category updated to '{new_category}' successfully."}

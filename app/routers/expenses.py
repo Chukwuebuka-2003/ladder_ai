@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
@@ -11,7 +11,8 @@ from services.expense_service import (
     get_expenses as service_get_expenses,
     get_expense_by_id,
     update_expense as service_update_expense,
-    delete_expense as service_delete_expense
+    delete_expense as service_delete_expense,
+    create_expense_from_receipt,
 )
 
 from services.deps import get_current_user
@@ -19,7 +20,46 @@ from models import User
 
 router = APIRouter()
 
-@router.post("/expenses/", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
+# Define allowed content types and max file size (e.g., 5MB)
+ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/gif"]
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post("/receipt", response_model=List[ExpenseResponse], status_code=status.HTTP_201_CREATED)
+async def upload_receipt_route(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Upload a receipt image, extract expense details, and create an expense for each line item.
+    """
+    # Validate file type
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed."
+        )
+
+    # Validate file size
+    size = await file.read()
+    if len(size) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_PAYLOAD_TOO_LARGE,
+            detail=f"File size exceeds the limit of {MAX_FILE_SIZE // 1024 // 1024}MB."
+        )
+    await file.seek(0)
+
+    try:
+        image_data = await file.read()
+        db_expenses = create_expense_from_receipt(db=db, image_data=image_data, user_id=current_user.id)
+        return db_expenses
+    except Exception as e:
+        logger.error(f"Error in upload_receipt_route: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to process receipt: {e}")
+
+
+@router.post("", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
 async def create_expense_route(
     expense_create: ExpenseCreate,
     db: Session = Depends(get_db),
@@ -34,7 +74,7 @@ async def create_expense_route(
         logger.error(f"Error in create_expense_route: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create expense: {e}")
 
-@router.get("/expenses/", response_model=List[ExpenseResponse])
+@router.get("", response_model=List[ExpenseResponse])
 async def get_expenses_route(
     skip: int = 0,
     limit: int = 10,
@@ -50,7 +90,7 @@ async def get_expenses_route(
         logger.error(f"Error in get_expenses_route: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve expenses: {e}")
 
-@router.get("/expenses/{expense_id}/", response_model=ExpenseResponse)
+@router.get("/{expense_id}", response_model=ExpenseResponse)
 async def get_expense_route(
     expense_id: int,
     db: Session = Depends(get_db),
@@ -67,7 +107,7 @@ async def get_expense_route(
 
     return db_expense
 
-@router.put("/expenses/{expense_id}/", response_model=ExpenseResponse)
+@router.put("/{expense_id}", response_model=ExpenseResponse)
 async def update_expense_route(
     expense_id: int,
     expense_update: ExpenseUpdate,
@@ -89,7 +129,7 @@ async def update_expense_route(
 
     return db_expense_updated
 
-@router.delete("/expenses/{expense_id}/")
+@router.delete("/{expense_id}")
 async def delete_expense_route(
     expense_id: int,
     db: Session = Depends(get_db),

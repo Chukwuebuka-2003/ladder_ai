@@ -7,12 +7,12 @@ from sqlalchemy import (
     func,
     Boolean,
     Integer,
-    Float,  # Imported Float
+    Float,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship
-#from utils import generate_otp
 
 Base = declarative_base()
 
@@ -42,13 +42,31 @@ class Expense(Base):
     __tablename__ = 'expenses'
 
     id = Column(Integer, primary_key=True, index=True)
-    amount = Column(Float, nullable=False) # Float is now imported
+    amount = Column(Float, nullable=False)
     description = Column(String(255))
     category = Column(String(50))
     date = Column(DateTime)
     user_id = Column(Integer, ForeignKey("users.id"))
+    receipt_id = Column(String(255), index=True, nullable=True)
+    receipt_group_id = Column(String(255), index=True, nullable=True)
 
     user = relationship("User", back_populates="expenses")
 
-# Define the relationship on the User class after Expense is defined
+class Budget(Base):
+    __tablename__ = 'budgets'
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String(50), nullable=False)
+    amount = Column(Float, nullable=False)
+    start_date = Column(DateTime, default=datetime.utcnow)
+    end_date = Column(DateTime, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    user = relationship("User", back_populates="budgets")
+
+    __table_args__ = (UniqueConstraint('user_id', 'category', 'start_date', 'end_date', name='_user_category_date_uc'),)
+
+
+# Define relationships on the User class
 User.expenses = relationship("Expense", order_by=Expense.id, back_populates="user")
+User.budgets = relationship("Budget", order_by=Budget.id, back_populates="user")

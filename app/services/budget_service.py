@@ -43,7 +43,18 @@ def update_budget(db: Session, budget_id: int, budget_update: BudgetUpdate, user
     if not db_budget:
         return None
 
-    for key, value in budget_update.dict(exclude_unset=True).items():
+    update_data = budget_update.dict(exclude_unset=True)
+
+    if "amount" in update_data and update_data["amount"] <= 0:
+        raise ValueError("Budget amount must be positive.")
+
+    # Date validation
+    start_date = update_data.get("start_date", db_budget.start_date)
+    end_date = update_data.get("end_date", db_budget.end_date)
+    if start_date and end_date and start_date >= end_date:
+        raise ValueError("Start date must be before end date.")
+
+    for key, value in update_data.items():
         setattr(db_budget, key, value)
 
     db.commit()
